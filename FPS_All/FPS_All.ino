@@ -1,11 +1,14 @@
 #include "FPS_GT511C3.h"
 #include "SoftwareSerial.h"
 
-//FPS connected to pin 4 and 5 - see previous schemas
+/* Vcc connected to 3.3V
+ * GND
+ * Tx FPS connected to pin 4 
+ * Rx FPS connected to pin 5
+ */
 FPS_GT511C3 fps(4, 5);
 
-int choice = 0;
-bool isFingerPressed = false;
+int choice;
 
 void setup() {
   Serial.begin(9600);
@@ -13,7 +16,6 @@ void setup() {
   fps.Open();
   fps.SetLED(false);
   mainActivity();
-  
 }
 
 void loop() {
@@ -22,15 +24,14 @@ void loop() {
 
 
 void mainActivity(){
-  
   hbar();
-  Serial.println("-- FINGERPRINT SENSOR --");
+  Serial.println("FINGERPRINT SENSOR");
   Serial.println("");
   Serial.println("1. Enroll");
   Serial.println("2. Recognize");
   Serial.println("3. Reset All");
   Serial.println("4. Help");
-  Serial.println("Choose 1, 2, 3 or 4: ");
+  Serial.println("Press 1, 2, 3 or 4: ");
   
   while (true) {
     if (Serial.available() > 0) {
@@ -45,12 +46,11 @@ void mainActivity(){
       if (choice == 51) {
         choice3();
       }
-
       if (choice == 52) {
         choice4();
       }
     }
-      delay(2);
+    delay(1);
   }
 }
 
@@ -58,7 +58,76 @@ void mainActivity(){
 void choice1(){
   hbar();
   Serial.println("1. Enroll");
-  Enroll();
+  Serial.println(""); 
+
+  // Find open enroll ID.
+  int enrollid = 0;
+  bool usedid = true;
+  while (usedid == true) {
+    usedid = fps.CheckEnrolled(enrollid);
+    if (usedid==true) enrollid++;
+  }
+  fps.EnrollStart(enrollid);
+  
+  fps.SetLED(true); 
+  
+  // Enroll.
+  Serial.print("Press finger to Enroll #");
+  Serial.println(enrollid);
+  while(fps.IsPressFinger() == false) delay(100);
+  bool bret = fps.CaptureFinger(true);
+  int iret = 0;
+  if (bret != false) {
+    blinks();
+    Serial.println("Remove finger");
+    fps.Enroll1(); 
+    while(fps.IsPressFinger() == true) delay(100);
+    Serial.println("Press same finger again");
+    fps.SetLED(true);
+    while(fps.IsPressFinger() == false) delay(100);
+    bret = fps.CaptureFinger(true);
+    if (bret != false) {
+      blinks();
+      Serial.println("Remove finger");
+      fps.Enroll2();
+      while(fps.IsPressFinger() == true) delay(100);
+      Serial.println("Press same finger yet again");
+      fps.SetLED(true);
+      while(fps.IsPressFinger() == false) delay(100);
+      bret = fps.CaptureFinger(true);
+      if (bret != false) {
+        blinks();
+        Serial.println("Remove finger");
+        iret = fps.Enroll3();
+        if (iret == 0) {
+          Serial.println("Enrolling Successfull");
+          successNote();
+          mainActivity();
+        }
+        else{
+          Serial.print("Enrolling Failed with error code:");
+          Serial.println(iret);
+          failureNote();
+          mainActivity();
+        }
+      }
+      else {
+        Serial.println("Failed to capture third finger");
+        failureNote();
+        mainActivity();
+      }
+    }
+    else {
+      Serial.println("Failed to capture second finger");
+      failureNote();
+      mainActivity();
+    }
+  }
+  else {
+    Serial.println("Failed to capture first finger");
+    failureNote();
+    mainActivity();
+   }
 }
 
 
@@ -66,7 +135,7 @@ void choice2(){
   hbar();
   Serial.println("2. Recognise");
   Serial.println("");
-  Serial.println("Please press finger\n");
+  Serial.println("Please press finger");
   
   fps.SetLED(true);
   
@@ -109,7 +178,7 @@ void choice4(){
   Serial.println("- No light: you can not interact with the sensor at the moment.");
   Serial.println("- Uninterrupted light: waiting for your finger.");
   Serial.println("- 2 blinks: you can remove your finger.");
-  Serial.println("- 2 long blinks: an error happened.");
+  Serial.println("- 2 long blinks: error or unrecognised fingerprint.");
   Serial.println("- 5 fast blinks: Success!");
   mainActivity();
 }
@@ -120,83 +189,9 @@ void hbar(){
 }
 
 
-// Enroll
-void Enroll() {
-  // Enroll test
-  
-  fps.SetLED(true);  
-
-  // find open enroll id
-  int enrollid = 0;
-  bool usedid = true;
-  while (usedid == true) {
-    usedid = fps.CheckEnrolled(enrollid);
-    if (usedid==true) enrollid++;
-  }
-  fps.EnrollStart(enrollid);
-
-  // enroll
-  Serial.print("Press finger to Enroll #");
-  Serial.println(enrollid);
-  while(fps.IsPressFinger() == false) {
-    delay(75);
-    };
-  bool bret = fps.CaptureFinger(true);
-  int iret = 0;
-  if (bret != false) {
-    blinks();
-    Serial.println("Remove finger");
-    fps.Enroll1(); 
-    while(fps.IsPressFinger() == true) delay(100);
-    Serial.println("Press same finger again");
-    while(fps.IsPressFinger() == false) delay(100);
-    bret = fps.CaptureFinger(true);
-    if (bret != false) {
-      blinks();
-      Serial.println("Remove finger");
-      fps.Enroll2();
-      while(fps.IsPressFinger() == true) delay(100);
-      Serial.println("Press same finger yet again");
-      while(fps.IsPressFinger() == false) delay(100);
-      bret = fps.CaptureFinger(true);
-      if (bret != false) {
-        blinks();
-        Serial.println("Remove finger");
-        iret = fps.Enroll3();
-        if (iret == 0) {
-          Serial.println("Enrolling Successfull");
-          successNote();
-          mainActivity();
-        }
-        else{
-          Serial.print("Enrolling Failed with error code:");
-          Serial.println(iret);
-          failureNote();
-          mainActivity();
-        }
-      }
-      else {
-        Serial.println("Failed to capture third finger");
-        failureNote();
-        mainActivity();
-      }
-    }
-    else {
-      Serial.println("Failed to capture second finger");
-      failureNote();
-      mainActivity();
-    }
-  }
-  else {
-    Serial.println("Failed to capture first finger");
-    failureNote();
-    mainActivity();
-   }
-}
 
 
 void blinks() {
-  delay(100);
   fps.SetLED(false);
   delay(100);
   fps.SetLED(true);
@@ -204,6 +199,8 @@ void blinks() {
   fps.SetLED(false);
   delay(100);
   fps.SetLED(true);
+  delay(100);
+  fps.SetLED(false);
 }
 
 void note(int x){
@@ -228,4 +225,3 @@ void failureNote(){
   delay(800);
   note(50);
 }
-
